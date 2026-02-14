@@ -1,0 +1,42 @@
+name: Market Volatility Bot
+
+on:
+  schedule:
+    # GitHub 使用的是 UTC 时间 (比北京时间慢8小时，比美东慢4或5小时)
+    
+    # 1. 北京时间 08:30 (UTC 00:30)
+    - cron: '30 0 * * *'
+    
+    # 2. 美股开盘后20分钟
+    # 美股夏令时 (3月-11月): 开盘 09:30 ET -> 发送 09:50 ET -> UTC 13:50
+    - cron: '50 13 * * 1-5' # 周一到周五
+    
+    # 美股冬令时 (11月-3月): 开盘 09:30 ET -> 发送 09:50 ET -> UTC 14:50
+    # 为了保险，你可以把冬令时的时间也加上，或者到时候再改
+    - cron: '50 14 * * 1-5'
+
+  # 允许你手动点击按钮运行 (方便测试)
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run script
+        env: 
+          # 这里把刚才设置的 Secret 注入到环境变量
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python main.py
