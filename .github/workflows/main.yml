@@ -1,21 +1,23 @@
-name: Market Volatility Bot
+name: Gold Volatility Bot
+
+# === 关键：赋予写入权限，否则无法保存 CSV ===
+permissions:
+  contents: write
 
 on:
   schedule:
-    # GitHub 使用的是 UTC 时间 (比北京时间慢8小时，比美东慢4或5小时)
+    # GitHub 使用 UTC 时间 (北京时间 - 8小时)
     
-    # 1. 北京时间 08:30 (UTC 00:30)
-    - cron: '30 0 * * *'
+    # 1. 早盘：北京时间 08:30 (UTC 00:30)
+    # 此时会创建一行新记录
+    - cron: '30 0 * * 1-5'
     
-    # 2. 美股开盘后20分钟
-    # 美股夏令时 (3月-11月): 开盘 09:30 ET -> 发送 09:50 ET -> UTC 13:50
-    - cron: '50 13 * * 1-5' # 周一到周五
-    
-    # 美股冬令时 (11月-3月): 开盘 09:30 ET -> 发送 09:50 ET -> UTC 14:50
-    # 为了保险，你可以把冬令时的时间也加上，或者到时候再改
-    - cron: '50 14 * * 1-5'
+    # 2. 晚盘：美股开盘后 (北京时间 22:45 或 23:45)
+    # 这里设为 UTC 14:45，确保无论是冬令时还是夏令时，美股都已经开盘
+    # 此时会覆盖更新早上的记录
+    - cron: '45 14 * * 1-5'
 
-  # 允许你手动点击按钮运行 (方便测试)
+  # 允许手动触发
   workflow_dispatch:
 
 jobs:
@@ -31,12 +33,21 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run script
         env: 
-          # 这里把刚才设置的 Secret 注入到环境变量
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python main.py
+
+      # === 关键步骤：把生成的 CSV 提交回仓库 ===
+      - name: Commit and Push CSV
+        run: |
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "actions@github.com"
+          # 检查是否有 gold_record.csv 的变化
+          git add gold_record.csv
+          # 如果有变化则提交，没变化则忽略 (防止报错)
+          git commit -m "Update Daily Record" || echo "No changes to commit"
+          git push
