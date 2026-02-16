@@ -57,9 +57,19 @@ jobs:
         run: python main.py
 
       # 6. 提交并推送变化
-      - name: Commit and Push
+      - name: Commit and Push CSV
         run: |
+          # 1. 配置身份
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 2. 【关键】先把文件存入本地仓库 (Add & Commit)
+          # 只有 Commit 了，文件才不会被视为“Untracked”，git pull 也就不会报错了
           git add market_record.csv
-          # 如果没有变化就跳过，不报错
-          git commit -m "Update daily market record" || echo "No changes to commit"
+          git commit -m "Update market record" || echo "No changes to commit"
+          
+          # 3. 本地存好后，再拉取远程更新 (使用 --rebase 避免产生分叉)
+          git pull --rebase origin main
+          
+          # 4. 最后推送到远程
           git push origin main
