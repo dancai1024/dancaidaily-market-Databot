@@ -8,15 +8,13 @@ on:
   schedule:
     # --- 1. 早盘计划 ---
     # 北京/马来西亚时间 08:30 (UTC 00:30)
-    # 这次运行会创建当天的“早盘计划”
     - cron: '30 0 * * 1-5'
     
     # --- 2. 晚盘更新 (美股开盘后) ---
-    # 夏令时 (3月-11月): 美股 21:30 开盘 -> 21:50 运行 (UTC 13:50)
+    # 夏令时 (3月-11月): UTC 13:50
     - cron: '50 13 * * 1-5'
     
-    # 冬令时 (11月-3月): 美股 22:30 开盘 -> 22:50 运行 (UTC 14:50)
-    # 设置两个时间点是为了自动适配，多跑一次也没关系
+    # 冬令时 (11月-3月): UTC 14:50
     - cron: '50 14 * * 1-5'
 
   # 允许手动点击按钮测试
@@ -25,44 +23,43 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    
     steps:
+      # 1. 检出代码
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. 设置 Python 环境
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10' # 建议用 3.10 或 3.9
 
+      # 3. 安装依赖
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run script
-        env: 
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python main.py
-
-# 1. 先配置 Git 身份
-      - name: Configure Git
+      # 4. 【关键修复】先配置 Git 并拉取最新代码
+      # 这步必须在运行脚本之前，防止 CSV 文件冲突
+      - name: Configure Git & Pull
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          # 使用 rebase 策略拉取，防止合并冲突
+          git pull origin main --rebase || echo "Git pull failed or nothing to pull"
 
-      # 2. 【关键】先拉取最新代码 (把 git pull 放在脚本运行前)
-      - name: Pull latest changes
-        run: git pull origin main
-
-      # 3. 然后再运行脚本 (这样脚本会基于最新的 csv 进行更新，而不是新建)
+      # 5. 运行脚本 (只跑这一次！)
       - name: Run trading script
-        run: python main.py  # 或者是你的脚本文件名
-        env:
+        env: 
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
 
-      # 4. 最后提交变化
+      # 6. 提交并推送变化
       - name: Commit and Push
         run: |
           git add market_record.csv
+          # 如果没有变化就跳过，不报错
           git commit -m "Update daily market record" || echo "No changes to commit"
           git push origin main
