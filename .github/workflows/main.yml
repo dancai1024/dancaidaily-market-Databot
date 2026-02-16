@@ -43,21 +43,26 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: python main.py
 
-      # --- 关键步骤：提交新的 CSV 回仓库 ---
-      - name: Commit and Push CSV
+# 1. 先配置 Git 身份
+      - name: Configure Git
         run: |
-          # 配置 Git 机器人身份
-          git config --global user.name "GitHub Action Bot"
-          git config --global user.email "actions@github.com"
-          
-          # 先拉取最新代码，防止冲突
-          git pull
-          
-          # 【重点】这里必须是 market_record.csv
-          # 因为我们在 Python 代码里把文件名改成了这个
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      # 2. 【关键】先拉取最新代码 (把 git pull 放在脚本运行前)
+      - name: Pull latest changes
+        run: git pull origin main
+
+      # 3. 然后再运行脚本 (这样脚本会基于最新的 csv 进行更新，而不是新建)
+      - name: Run trading script
+        run: python main.py  # 或者是你的脚本文件名
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      # 4. 最后提交变化
+      - name: Commit and Push
+        run: |
           git add market_record.csv
-          
-          # 提交并推送
-          # || echo ... 的意思是：如果没变化就不报错，继续执行
-          git commit -m "Update Market Record" || echo "No changes to commit"
-          git push
+          git commit -m "Update daily market record" || echo "No changes to commit"
+          git push origin main
